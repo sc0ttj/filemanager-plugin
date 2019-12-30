@@ -1,4 +1,4 @@
-VERSION = "3.2.0"
+VERSION = "3.4.0"
 
 -- Let the user disable showing of dotfiles like ".editorconfig" or ".DS_STORE"
 if GetOption("filemanager-showdotfiles") == nil then
@@ -13,6 +13,17 @@ end
 -- Let the user disable going to parent directory via left arrow key when file selected (not directory)
 if GetOption("filemanager-compressparent") == nil then
 	AddOption("filemanager-compressparent", true)
+end
+
+-- Let the user choose to list sub-folders first when listing the contents of a folder
+if GetOption("filemanager-foldersfirst") == nil then
+	AddOption("filemanager-foldersfirst", true)
+end
+
+-- Lets the user have the filetree auto-open any time Micro is opened
+-- false by default, as it's a rather noticable user-facing change
+if GetOption("filemanager-openonstart") == nil then
+	AddOption("filemanager-openonstart", false)
 end
 
 -- Clear out all stuff in Micro's messenger
@@ -77,32 +88,20 @@ local function is_dir(path)
 	end
 end
 
--- Runs the command and returns the readout/printout
-local function get_popen_readout(cmd)
-	local process = io.popen(cmd)
-	local readout = process:read("*a")
-	process:close()
-	return readout
-end
-
 -- Returns a list of files (in the target dir) that are ignored by the VCS system (if exists)
 -- aka this returns a list of gitignored files (but for whatever VCS is found)
 local function get_ignored_files(tar_dir)
 	-- True/false if the target dir returns a non-fatal error when checked with 'git status'
 	local function has_git()
-		-- io.popen readout returns an empty string if it fails
-		if get_popen_readout('git -C "' .. tar_dir .. '" status') == "" then
-			return false
-		else
-			return true
-		end
+		local git_rp_results = RunShellCommand('git  -C "' .. tar_dir .. '" rev-parse --is-inside-work-tree')
+		return git_rp_results:match("^true%s*$")
 	end
 	local readout_results = {}
 	-- TODO: Support more than just Git, such as Mercurial or SVN
 	if has_git() then
 		-- If the dir is a git dir, get all ignored in the dir
 		local git_ls_results =
-			get_popen_readout('git -C "' .. tar_dir .. '" ls-files . --ignored --exclude-standard --others --directory')
+			RunShellCommand('git -C "' .. tar_dir .. '" ls-files . --ignored --exclude-standard --others --directory')
 		-- Cut off the newline that is at the end of each result
 		for split_results in string.gmatch(git_ls_results, "([^\r\n]+)") do
 			-- git ls-files adds a trailing slash if it's a dir, so we remove it (if it is one)
@@ -122,7 +121,7 @@ local function get_basename(path)
 		return nil
 	else
 		-- Get Go's path lib for a basename callback
-		local golib_path = import("path")
+		local golib_path = import("filepath")
 		return golib_path.Base(path)
 	end
 end
@@ -152,6 +151,7 @@ local function get_scanlist(dir, ownership, indent_n)
 
 	-- The list of files to be returned (and eventually put in the view)
 	local results = {}
+	local files = {}
 
 	local function get_results_object(file_name)
 		local abs_path = JoinPaths(dir, file_name)
@@ -163,9 +163,10 @@ local function get_scanlist(dir, ownership, indent_n)
 	-- Save so we don't have to rerun GetOption a bunch
 	local show_dotfiles = GetOption("filemanager-showdotfiles")
 	local show_ignored = GetOption("filemanager-showignored")
+	local folders_first = GetOption("filemanager-foldersfirst")
 
 	-- The list of VCS-ignored files (if any)
-	-- Only bother gettig ignored files if we're not showing ignored
+	-- Only bother getting ignored files if we're not showing ignored
 	local ignored_files = (not show_ignored and get_ignored_files(dir) or {})
 	-- True/false if the file is an ignored file
 	local function is_ignored_file(filename)
@@ -180,39 +181,36 @@ local function get_scanlist(dir, ownership, indent_n)
 	-- Hold the current scan's filename in most of the loops below
 	local filename
 
-	-- Splitting the loops for speed, so we don't run an unnecessary if every pass
-	if not show_dotfiles and not show_ignored then
-		-- Don't show dotfiles or ignored
-		for i = 1, #dir_scan do
-			filename = dir_scan[i]:Name()
-			-- Check if it's a hidden file
-			if not is_dotfile(filename) and not is_ignored_file(filename) then
-				-- Since we skip indicies of dotfiles, don't use i here or we add nil values
+	for i = 1, #dir_scan do
+		local showfile = true
+		filename = dir_scan[i]:Name()
+		-- If we should not show dotfiles, and this is a dotfile, don't show
+		if not show_dotfiles and is_dotfile(filename) then
+			showfile = false
+		end
+		-- If we should not show ignored files, and this is an ignored file, don't show
+		if not show_ignored and is_ignored_file(filename) then
+			showfile = false
+		end
+		if showfile then
+			-- This file is good to show, proceed
+			if folders_first and not is_dir(JoinPaths(dir, filename)) then
+				-- If folders_first and this is a file, add it to (temporary) files
+				files[#files + 1] = get_results_object(filename)
+			else
+				-- Otherwise, add to results
 				results[#results + 1] = get_results_object(filename)
 			end
-		end
-	elseif show_dotfiles and not show_ignored then
-		-- Show dotfiles but not ignored
-		for i = 1, #dir_scan do
-			filename = dir_scan[i]:Name()
-			if not is_ignored_file(filename) then
-				results[#results + 1] = get_results_object(filename)
-			end
-		end
-	elseif not show_dotfiles and show_ignored then
-		-- Show ignored but not dotfiles
-		for i = 1, #dir_scan do
-			filename = dir_scan[i]:Name()
-			if not is_dotfile(filename) then
-				results[#results + 1] = get_results_object(filename)
-			end
-		end
-	else
-		-- Show dotfiles and ignored (aka everything)
-		for i = 1, #dir_scan do
-			results[i] = get_results_object(dir_scan[i]:Name())
 		end
 	end
+	if #files > 0 then
+		-- Append any files to results, now that all folders have been added
+		-- files will be > 0 only if folders_first and there are files
+		for i = 1, #files do
+			results[#results + 1] = files[i]
+		end
+	end
+
 	-- Return the list of scanned files
 	return results
 end
@@ -466,8 +464,7 @@ function prompt_delete_at_cursor()
 		return
 	end
 
-	local yes_del,
-		no_del =
+	local yes_del, no_del =
 		messenger:YesNoPrompt(
 		"Do you want to delete the " .. (scanlist[y].dirmsg ~= "" and "dir" or "file") .. ' "' .. scanlist[y].abspath .. '"? '
 	)
@@ -549,7 +546,7 @@ local function try_open_at_y(y)
 		else
 			-- If it's a file, then open it
 			messenger:Message("Filemanager opened ", scanlist[y].abspath)
-			-- Opens the absolute path in new vertical view
+			-- Opens the absolute path in new tab
 			CurView():NewTabFromView(NewView(NewBufferFromFile(scanlist[y].abspath), 1))
 			-- Refreshes it to be visible
 			CurView().Buf:ReOpen()
@@ -1344,3 +1341,21 @@ MakeCommand("rm", "filemanager.prompt_delete_at_cursor", 0)
 -- Adds colors to the ".." and any dir's in the tree view via syntax highlighting
 -- TODO: Change it to work with git, based on untracked/changed/added/whatever
 AddRuntimeFile("filemanager", "syntax", "syntax.yaml")
+
+-- NOTE: This must be below the syntax load command or coloring won't work
+-- Just auto-open if the option is enabled
+-- This will run when the plugin first loads
+if GetOption("filemanager-openonstart") == true then
+	-- Check for safety on the off-chance someone's init.lua breaks this
+	if tree_view == nil then
+		open_tree()
+		-- Puts the cursor back in the empty view that initially spawns
+		-- This is so the cursor isn't sitting in the tree view at startup
+		CurView():NextSplit(false)
+	else
+		-- Log error so they can fix it
+		messenger.AddLog(
+			"Warning: filemanager-openonstart was enabled, but somehow the tree was already open so the option was ignored."
+		)
+	end
+end

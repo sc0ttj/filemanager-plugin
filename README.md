@@ -12,13 +12,19 @@ The top line always has the current directory's path to show you where you are.\
 The `..` near the top is used to move back a directory, from your current position.
 
 All directories have a `/` added to the end of it, and are syntax-highlighted as a `special` character.\
-If it hasn't been uncompressed, there will be a `+` to the left of it. If it has been uncompressed, it will be a `-` instead.
-
-If you want to disable dotfiles from being shown, run `set filemanager-showdotfiles false` in Micro, then close & open the tree.\
-If you want to disable VCS-ignored (aka `.gitignore`) files from being shown, run `set filemanager-showignored false` in Micro, then close & open the tree.\
-If you don't want to go to a parent directory from any selected file via left arrow key (filemanager.compress_at_cursor keybinding), run `set filemanager-compressparent false`
+If the directory is expanded, there will be a `+` to the left of it. If it is collapsed there will be a `-` instead.
 
 **NOTE:** If you change files without using the plugin, it can't know what you did. The only fix is to close and open the tree.
+
+### Options
+
+| Option                       | Purpose                                                      | Default |
+| :--------------------------- | :----------------------------------------------------------- | :------ |
+| `filemanager-showdotfiles`   | Show dotfiles (hidden if false)                              | `true`  |
+| `filemanager-showignored`    | Show gitignore'd files (hidden if false)                     | `true`  |
+| `filemanager-compressparent` | Collapse the parent dir when left is pressed on a child file | `true`  |
+| `filemanager-foldersfirst`   | Sorts folders above any files                                | `true`  |
+| `filemanager-openonstart`    | Automatically open the file tree when starting Micro         | `false` |
 
 ### Commands and Keybindings
 
@@ -30,8 +36,8 @@ If you want to [keybind](https://github.com/zyedidia/micro/blob/master/runtime/h
 | :------- | :------------------------- | :------------------------------------------------------------------------------------------ | :------------------------------------ |
 | `tree`   | -                          | Open/close the tree                                                                         | `filemanager.toggle_tree`             |
 | -        | <kbd>Tab</kbd> & MouseLeft | Open a file, or go into the directory. Goes back a dir if on `..`                           | `filemanager.try_open_at_cursor`      |
-| -        | <kbd>→</kbd>               | Uncompress a directory's content under it                                                   | `filemanager.uncompress_at_cursor`    |
-| -        | <kbd>←</kbd>               | Compress any uncompressed content under a directory                                         | `filemanager.compress_at_cursor`      |
+| -        | <kbd>→</kbd>               | Expand directory in tree listing                                                            | `filemanager.uncompress_at_cursor`    |
+| -        | <kbd>←</kbd>               | Collapse directory listing                                                                  | `filemanager.compress_at_cursor`      |
 | -        | <kbd>Shift ⬆</kbd>         | Go to the target's parent directory                                                         | `filemanager.goto_parent_dir`         |
 | -        | <kbd>Alt Shift {</kbd>     | Jump to the previous directory in the view                                                  | `filemanager.goto_next_dir`           |
 | -        | <kbd>Alt Shift }</kbd>     | Jump to the next directory in the view                                                      | `filemanager.goto_prev_dir`           |
@@ -42,9 +48,9 @@ If you want to [keybind](https://github.com/zyedidia/micro/blob/master/runtime/h
 
 #### Notes
 
-* `rename`, `touch`, and `mkdir` require a name to be passed when calling.\
+- `rename`, `touch`, and `mkdir` require a name to be passed when calling.\
   Example: `rename newnamehere`, `touch filenamehere`, `mkdir dirnamehere`.\
   If the passed name already exists in the current dir, it will cancel instead of overwriting (for safety).
 
-* The <kbd>Ctrl w</kbd> keybinding is to switch which buffer your cursor is on.\
+- The <kbd>Ctrl w</kbd> keybinding is to switch which buffer your cursor is on.\
   This isn't specific to the plugin, it's just part of Micro, but many people seem to not know this.
