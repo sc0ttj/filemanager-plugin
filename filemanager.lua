@@ -546,8 +546,10 @@ local function try_open_at_y(y)
 		else
 			-- If it's a file, then open it
 			messenger:Message("Filemanager opened ", scanlist[y].abspath)
-			-- Opens the absolute path in new vertical view
-			CurView():VSplitIndex(NewBufferFromFile(scanlist[y].abspath), 1)
+			-- Opens the absolute path in new tab
+			CurView():NewTabFromView(NewView(NewBufferFromFile(scanlist[y].abspath), 1))
+			-- Refreshes it to be visible
+			CurView().Buf:ReOpen()
 			-- Resizes all views after opening a file
 			tabs[curTab + 1]:Resize()
 		end
